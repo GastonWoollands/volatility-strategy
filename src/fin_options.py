@@ -45,5 +45,5 @@ def implied_volatility(S, K, T, r, market_price, op_type:str="C", periods:int=25
     def error_function(sigma):
         return option_europ_bs(op_type, S, K, T, r, sigma) - market_price
 
-    result = optimize.root_scalar(error_function, bracket=[0.01, 2.0], method='bisect')
+    result = optimize.root_scalar(error_function, bracket=[0.01, 5.0], method='bisect')
     return result.root / np.sqrt(periods) if result.converged else np.nan

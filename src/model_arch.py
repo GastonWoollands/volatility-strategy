@@ -47,17 +47,13 @@ def get_best_model_params(best_model):
 def train_garch(data: pd.DataFrame, p:int=1, q:int=1, mean:str="Zero", dist:str="t", vol:str="Garch"):
     """Train GARCH model
     Args:
-        - ticker: ticker of the stock
-        - start_date: start date of the historical data
-        - end_date: end date of the historical data
+        - data: data to train model
     Returns:
         - res_garch: GARCH model results
-        - df: DataFrame with the historical data
     """
-    data['log_return'] = np.log(data['Close']).diff() # * 100
     data.dropna(inplace=True)
 
-    garch_mod = arch_model(data['log_return'], mean=mean, vol=vol, p=p, q=q, dist=dist, rescale=False)
+    garch_mod = arch_model(data, mean=mean, vol=vol, p=p, q=q, dist=dist, rescale=False)
     res_garch = garch_mod.fit(disp="off")
     
     return res_garch

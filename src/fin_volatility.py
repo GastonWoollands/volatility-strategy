@@ -24,8 +24,9 @@ def calculate_volatilities(stock, df: pd.DataFrame, today: datetime.date, period
     """
     results = []
     S = df.Close.iloc[-1].item()
-    
-    historical_vol = df['log_return'].std() * np.sqrt(year_trading_days)
+
+    historical_vol_daily  = df['log_return'].std()
+    # historical_vol_yearly = historical_vol_daily * np.sqrt(year_trading_days)
 
     for period in range(1, periods):
         expiration = get_next_expiration(today, period, expirations)
@@ -47,7 +48,7 @@ def calculate_volatilities(stock, df: pd.DataFrame, today: datetime.date, period
 
         current_date = today + pd.Timedelta(days=period)
 
-        results.append([current_date, imp_vol, pred_vol, historical_vol])
+        results.append([current_date, imp_vol, pred_vol, historical_vol_daily])
 
     results_df = pd.DataFrame(results, columns=['date', 'imp_vol', 'pred_vol', 'historical_vol'])
 
