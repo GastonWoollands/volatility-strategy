@@ -1,8 +1,8 @@
 import datetime
 import numpy as np
 import pandas as pd
-from fin_options import implied_volatility
-from fin_data import atm_option, get_next_expiration
+from .fin_options import implied_volatility
+from .fin_data import atm_option, get_next_expiration
 
 #------------------------------------------------------------------------------------------------
 
@@ -16,6 +16,9 @@ def calculate_volatilities(stock, df: pd.DataFrame, today: datetime.date, period
         - expirations: list of available expiration dates
         - predicted_volatility: predicted volatility
         - op_type: option type
+        - r: interest rate
+        - year_trading_days (int): days in the year       
+
     Returns:
         - results: DataFrame with the results: cols date, imp_vol, pred_vol, historical_vol
     """

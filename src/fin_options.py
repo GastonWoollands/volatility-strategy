@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.stats import norm
 from scipy import stats, optimize
 
 #------------------------------------------------------------------------------------------------
@@ -31,7 +30,7 @@ def option_europ_bs(op_type: str, S: float, K: float, T: float, r: float, sigma:
 
 #------------------------------------------------------------------------------------------------
 
-def implied_volatility(S, K, T, r, market_price, op_type:str="C"):
+def implied_volatility(S, K, T, r, market_price, op_type:str="C", periods:int=252):
     """Implied volatility
     Args:
         - S: spot price
@@ -47,4 +46,4 @@ def implied_volatility(S, K, T, r, market_price, op_type:str="C"):
         return option_europ_bs(op_type, S, K, T, r, sigma) - market_price
 
     result = optimize.root_scalar(error_function, bracket=[0.01, 2.0], method='bisect')
-    return result.root if result.converged else np.nan
+    return result.root / np.sqrt(periods) if result.converged else np.nan
