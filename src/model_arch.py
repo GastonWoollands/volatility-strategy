@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from arch import arch_model
+from scipy.stats import chi2
 
 #------------------------------------------------------------------------------------------------
 
