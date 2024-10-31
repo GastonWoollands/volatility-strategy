@@ -70,3 +70,35 @@ def garch_forecast(res_garch, horizon=30):
     """
     forecast = res_garch.forecast(horizon=horizon)
     return forecast
+
+#------------------------------------------------------------------------------------------------
+
+import numpy as np
+from scipy.stats import chi2
+
+def mcleod_li_test(residuals, k):
+    """
+    Calculates the McLeod-Li test statistic for a time series with k lags.
+    Returns the test statistic and its p-value.
+    
+    H0: No significant autocorrelation in the squared residuals --> Homocedasticity.
+    Args:
+        - residuals: residuals serie
+        - k (int): lags
+    Return:
+        - stat
+        - p-value
+    """
+    n = len(residuals)
+    residuals_sq = residuals ** 2
+
+    x_sum = np.sum(residuals_sq)
+    x_lag_sum = np.sum(residuals_sq[k:])  # sum from index k to n
+
+    test_stat = (n * (n + 2) * x_lag_sum) / (x_sum ** 2)
+    
+    df = k
+    
+    p_value = 1 - chi2.cdf(test_stat, df)
+    
+    return test_stat, p_value
