@@ -1,6 +1,6 @@
 ticker: 'TSLA'
 start_date: '2020-11-01'
-periods: 360
+periods: 256
 forecast_periods: 30
 p: 2
 q: 2
