@@ -74,9 +74,6 @@ def garch_forecast(res_garch, horizon=30):
 
 #------------------------------------------------------------------------------------------------
 
-import numpy as np
-from scipy.stats import chi2
-
 def mcleod_li_test(residuals, k):
     """
     Calculates the McLeod-Li test statistic for a time series with k lags.
