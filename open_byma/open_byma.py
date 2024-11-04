@@ -1,6 +1,7 @@
+import re
 import json
-import requests
 import urllib3
+import requests
 import numpy as np
 import pandas as pd
 from pytz import timezone
@@ -81,6 +82,9 @@ class openBYMAdata:
             'expiration'
         ]
         df['expiration'] = pd.to_datetime(df['expiration'])
+
+        df['option_type'] = df['symbol'].apply(self.__get_option_type)
+
         return df
 
     def get_bonds(self) -> pd.DataFrame:
@@ -169,3 +173,24 @@ class openBYMAdata:
         df['datetime'] = pd.to_datetime(df['datetime'])
         df[self.__numeric_columns] = df[self.__numeric_columns].apply(pd.to_numeric, errors='coerce')
         return df
+    
+    def __get_option_type(self, symbol: str) -> str:
+        """
+        Determine if the option is a Call or Put based on the symbol using regex.
+
+        Parameters:
+            symbol (str): The option symbol.
+
+        Returns:
+            str: 'Call' if the option is a call, 'Put' if the option is a put.
+        """
+        # Regex to find the character before the first group of digits
+        match = re.search(r'([A-Z])\d', symbol)
+        if match:
+            option_type_char = match.group(1).upper()
+            if option_type_char == 'C':
+                return 'C'
+            elif option_type_char == 'V':
+                return 'P'
+        else:
+            return None
