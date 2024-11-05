@@ -18,7 +18,9 @@ def get_data(ticker, start_date, end_date):
     hist = stock.history(start=start_date, end=end_date)
     df = pd.DataFrame(hist, columns=['Close'])
 
-    # df['log_return'] = np.log(df['Close']).diff() * 100
+    df['log_return'] = np.log(df['Close']).diff() * 100
+
+    df.dropna(inplace=True)
 
     return df
 
