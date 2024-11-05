@@ -66,7 +66,7 @@ class openBYMAdata:
     def get_cedears(self) -> pd.DataFrame:
         return self.__get_securities('cedears')
 
-    def get_options(self) -> pd.DataFrame:
+    def get_options(self, ticker: str = None, filter_vol: bool = False) -> pd.DataFrame:
         data='{"Content-Type":"application/json"}'
         response = self.__s.post('https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/options', headers=self.__headers, data=data, verify=False)
         df = pd.DataFrame(response.json())
@@ -77,13 +77,19 @@ class openBYMAdata:
             "underlyingSymbol", "maturityDate"
         ]].copy()
         df.columns = [
-            'symbol', 'bid_size', 'bid', 'ask', 'ask_size', 'last', 'close', 'change', 'open', 'high', 
+            'symbol', 'bid_size', 'bid', 'ask', 'ask_size', 'lastPrice', 'close', 'change', 'open', 'high', 
             'low', 'previous_close', 'turnover', 'volume', 'operations', 'datetime', 'underlying_asset', 
             'expiration'
         ]
-        df['expiration'] = pd.to_datetime(df['expiration'])
-
+        df['expiration' ] = pd.to_datetime(df['expiration']).dt.strftime('%Y-%m-%d')
         df['option_type'] = df['symbol'].apply(self.__get_option_type)
+        df['strike'     ] = df['symbol'].apply(self.__get_option_strike)
+
+        if ticker:
+            df = df[df.underlying_asset == ticker].reset_index(drop=True).copy()
+            
+        if filter_vol:
+            df = df[df.volume > 0].reset_index(drop=True).copy()
 
         return df
 
@@ -194,3 +200,19 @@ class openBYMAdata:
                 return 'P'
         else:
             return None
+
+    def __get_option_strike(self, symbol: str) -> float:
+        """
+        Extracts the strike price from the option symbol.
+
+        Parameters:
+            symbol (str): The option symbol.
+
+        Returns:
+            float: The strike price of the option.
+        """
+        match = re.search(r'(\d+)', symbol)
+        if match:
+            return float(match.group(0))
+        else:
+            raise ValueError(f"No strike price found in symbol: {symbol}")
