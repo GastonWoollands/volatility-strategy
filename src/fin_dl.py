@@ -1,0 +1,273 @@
+import torch
+import pickle
+import numpy as np
+import torch.nn as nn
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from torch.utils.data import DataLoader, TensorDataset
+
+
+#------------------------------------------------------------------------------------------------
+
+def calculate_volatility(df, window=30):
+    df['volatility'] = df['log_return'].rolling(window=window).std() * np.sqrt(252)
+    df.dropna(inplace=True)
+    
+    return df
+
+#------------------------------------------------------------------------------------------------
+
+def create_sequences(df, seq_length):
+    X = []
+    y = []
+    
+    for i in range(len(df) - seq_length):
+        X.append(df['log_return'].iloc[i:i+seq_length].values)
+        y.append(df['log_return'].iloc[i + seq_length])
+    
+    X = np.array(X)
+    y = np.array(y)
+    
+    return X, y
+
+#------------------------------------------------------------------------------------------------
+
+class DataPreprocessor:
+    def __init__(self, seq_length, batch_size, scaler=None, save_scaler_path=None):
+        self.seq_length = seq_length
+        self.batch_size = batch_size
+        self.save_scaler_path = save_scaler_path
+        self.scaler = scaler if scaler else StandardScaler()
+
+    def create_sequences(self, df):
+        """
+        Create sequences of logarithmic returns and their associated volatility.
+        """
+        X, y = [], []
+        for i in range(len(df) - self.seq_length):
+            X.append(df['log_return'].iloc[i:i + self.seq_length].values)
+            y.append(df['log_return'].iloc[i + self.seq_length])
+        
+        X = np.array(X)
+        y = np.array(y)
+        
+        return X, y
+    
+    def preprocess_data(self, df):
+        """
+        Preprocess data and save scaler if a path is provided.
+        """
+        # Fit and transform the data
+        df['log_return'] = self.scaler.fit_transform(df[['log_return']])
+        
+        # Save the scaler if a path is provided
+        if self.save_scaler_path:
+            self.save_scaler()
+        
+        X, y = self.create_sequences(df)
+        
+        train_size = int(len(X) * 0.8)
+        X_train, X_test = X[:train_size], X[train_size:]
+        y_train, y_test = y[:train_size], y[train_size:]
+        
+        X_train = torch.tensor(X_train, dtype=torch.float32)
+        X_test  = torch.tensor(X_test, dtype=torch.float32)
+        y_train = torch.tensor(y_train, dtype=torch.float32)
+        y_test  = torch.tensor(y_test, dtype=torch.float32)
+        
+        train_data = TensorDataset(X_train, y_train)
+        test_data  = TensorDataset(X_test, y_test)
+        
+        train_loader = DataLoader(train_data, batch_size=self.batch_size, shuffle=False)
+        test_loader  = DataLoader(test_data, batch_size=self.batch_size, shuffle=False)
+        
+        return train_loader, test_loader, X_train, X_test, y_train, y_test
+
+    def save_scaler(self):
+        """Save the scaler to a file after it has been fitted."""
+        with open(self.save_scaler_path, 'wb') as file:
+            pickle.dump(self.scaler, file)
+
+    @property
+    def scaler(self):
+        return self._scaler
+    
+    @scaler.setter
+    def scaler(self, scaler):
+        self._scaler = scaler
+
+#------------------------------------------------------------------------------------------------
+
+class LSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(LSTMModel, self).__init__()
+        self.hidden_size = hidden_size
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
+        self.fc   = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x, hidden_state=None):        
+        if hidden_state is None:
+            h0 = torch.zeros(1, x.size(0), self.hidden_size).to(x.device)
+            c0 = torch.zeros(1, x.size(0), self.hidden_size).to(x.device)
+        else:
+            h0, c0 = hidden_state
+        
+        lstm_out, (h_n, c_n) = self.lstm(x, (h0, c0))
+        
+        out = self.fc(lstm_out[:, -1, :])
+        
+        return out, (h_n, c_n)
+    
+#------------------------------------------------------------------------------------------------
+
+class GRUModel(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, device='cpu'):
+        super(GRUModel, self).__init__()
+        self.hidden_size = hidden_size
+        self.device = device
+        self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+        self.to(self.device)
+
+    def forward(self, x, hidden_state=None):
+        out, hidden_state = self.gru(x, hidden_state)
+        out = self.fc(out[:, -1, :])
+        return out, hidden_state
+    
+#------------------------------------------------------------------------------------------------
+
+class Trainer:
+    def __init__(self, model, train_loader, test_loader, criterion, optimizer, device, epochs=1000, early_stopping_patience=20):
+        self._model = model
+        self.train_loader = train_loader
+        self.test_loader = test_loader
+        self.criterion = criterion
+        self.optimizer = optimizer
+        self.device = device
+        self.epochs = epochs
+        self.early_stopping_patience = early_stopping_patience
+
+    def train(self):
+        train_losses, val_losses = [], []
+        best_val_loss = float('inf')
+        epochs_without_improvement = 0
+        
+        for epoch in range(self.epochs):
+            self._model.train()
+            running_train_loss = 0
+            
+            for input_seq, target in self.train_loader:
+                input_seq = input_seq.to(self.device)
+                target = target.to(self.device)
+                
+                self.optimizer.zero_grad()
+                
+                hidden_state = None
+                output, hidden_state = self._model(input_seq.unsqueeze(-1), hidden_state)
+                
+                loss = self.criterion(output.squeeze(-1), target)
+                loss.backward()
+                self.optimizer.step()
+                
+                running_train_loss += loss.item()
+            
+            avg_train_loss = running_train_loss / len(self.train_loader)
+            train_losses.append(avg_train_loss)
+            
+            # Validación
+            val_loss = self.validate()
+            val_losses.append(val_loss)
+            
+            # Early stopping
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                
+            if epochs_without_improvement >= self.early_stopping_patience:
+                print(f"Early stopping at epoch {epoch+1}")
+                break
+            
+            if epoch % 10 == 0:
+                print(f'Epoch {epoch+1}/{self.epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}')
+        
+        return train_losses, val_losses
+    
+    def validate(self):
+        self._model.eval()
+        running_val_loss = 0
+        with torch.no_grad():
+            for input_seq, target in self.test_loader:
+                input_seq = input_seq.to(self.device)
+                target = target.to(self.device)
+                
+                output, _ = self._model(input_seq.unsqueeze(-1), hidden_state=None)
+                val_loss = self.criterion(output.squeeze(-1), target)
+                running_val_loss += val_loss.item()
+        
+        avg_val_loss = running_val_loss / len(self.test_loader)
+        return avg_val_loss
+
+    @property
+    def model(self):
+        return self._model
+
+    @model.setter
+    def model(self, value):
+        self._model = value
+
+    @property
+    def train_loader(self):
+        return self._train_loader
+
+    @train_loader.setter
+    def train_loader(self, value):
+        self._train_loader = value
+
+    @property
+    def test_loader(self):
+        return self._test_loader
+
+    @test_loader.setter
+    def test_loader(self, value):
+        self._test_loader = value
+
+    @property
+    def criterion(self):
+        return self._criterion
+
+    @criterion.setter
+    def criterion(self, value):
+        self._criterion = value
+
+    @property
+    def optimizer(self):
+        return self._optimizer
+
+    @optimizer.setter
+    def optimizer(self, value):
+        self._optimizer = value
+
+    @property
+    def device(self):
+        return self._device
+
+    @device.setter
+    def device(self, value):
+        self._device = value
+
+    @property
+    def epochs(self):
+        return self._epochs
+
+    @epochs.setter
+    def epochs(self, value):
+        self._epochs = value
+
+    @property
+    def early_stopping_patience(self):
+        return self._early_stopping_patience
+
+    @early_stopping_patience.setter
+    def early_stopping_patience(self, value):
+        self._early_stopping_patience = value
