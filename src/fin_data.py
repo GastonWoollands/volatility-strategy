@@ -5,12 +5,13 @@ from datetime import datetime, timedelta
 
 #------------------------------------------------------------------------------------------------
 
-def get_data(ticker, start_date, end_date):
+def get_data(ticker, start_date: str, end_date: str, include_earnings: bool = False):
     """Get historical data from Yahoo Finance
     Args:
         - ticker: ticker of the stock
-        - start_date: start date of the historical data
-        - end_date: end date of the historical data
+        - start_date: start date of the historical data YYYY-MM-DD
+        - end_date: end date of the historical data YYYY-MM-DD
+        - include_earnings: whether to include earnings data
     Returns:
         - df: DataFrame with the historical data
     """
@@ -22,6 +23,23 @@ def get_data(ticker, start_date, end_date):
 
     df.dropna(inplace=True)
 
+    df.index = pd.to_datetime(df.index).date
+
+    if include_earnings:
+        earnings_dates = stock.get_earnings_dates(limit=100)
+        earnings_dates.index = pd.to_datetime(earnings_dates.index).date
+
+        earnings_dates = earnings_dates.groupby(earnings_dates.index).agg({
+            'EPS Estimate': 'max',
+            'Surprise(%)': 'max'
+        }).rename(columns={
+            'EPS Estimate': 'estimate',
+            'Surprise(%)': 'surprise'
+        })
+
+        df['earnings'] = df.index.isin(earnings_dates.index).astype(int)
+        df = df.merge(earnings_dates, left_index=True, right_index=True, how='left')
+        df.fillna(0, inplace=True)
     return df
 
 #------------------------------------------------------------------------------------------------
