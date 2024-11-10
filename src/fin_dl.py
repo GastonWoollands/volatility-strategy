@@ -32,19 +32,27 @@ def create_sequences(df, seq_length):
 #------------------------------------------------------------------------------------------------
 
 class DataPreprocessor:
-    def __init__(self, seq_length, batch_size, scaler=None, save_scaler_path=None):
+    def __init__(self, seq_length: int, batch_size: int, scaler = None, save_scaler_path:str = None, extra_vars:list = None):
         self.seq_length = seq_length
         self.batch_size = batch_size
         self.save_scaler_path = save_scaler_path
         self.scaler = scaler if scaler else StandardScaler()
+        self.extra_vars = extra_vars if extra_vars else []
 
     def create_sequences(self, df):
         """
-        Create sequences of logarithmic returns and their associated volatility.
+        Create sequences of logarithmic returns and their associated volatility,
+        including additional variables if specified.
         """
         X, y = [], []
         for i in range(len(df) - self.seq_length):
-            X.append(df['log_return'].iloc[i:i + self.seq_length].values)
+            sequence = df['log_return'].iloc[i:i + self.seq_length].values.reshape(-1, 1)
+            
+            if self.extra_vars:
+                extra_data = df[self.extra_vars].iloc[i:i + self.seq_length].values
+                sequence = np.concatenate([sequence, extra_data], axis=1)
+
+            X.append(sequence)
             y.append(df['log_return'].iloc[i + self.seq_length])
         
         X = np.array(X)
@@ -56,7 +64,6 @@ class DataPreprocessor:
         """
         Preprocess data and save scaler if a path is provided.
         """
-        # Fit and transform the data
         df['log_return'] = self.scaler.fit_transform(df[['log_return']])
         
         # Save the scaler if a path is provided
@@ -132,7 +139,7 @@ class GRUModel(nn.Module):
         out, hidden_state = self.gru(x, hidden_state)
         out = self.fc(out[:, -1, :])
         return out, hidden_state
-    
+
 #------------------------------------------------------------------------------------------------
 
 class Trainer:
@@ -162,8 +169,8 @@ class Trainer:
                 self.optimizer.zero_grad()
                 
                 hidden_state = None
-                output, hidden_state = self._model(input_seq.unsqueeze(-1), hidden_state)
-                
+                output, hidden_state = self._model(input_seq, hidden_state)
+
                 loss = self.criterion(output.squeeze(-1), target)
                 loss.backward()
                 self.optimizer.step()
@@ -201,7 +208,7 @@ class Trainer:
                 input_seq = input_seq.to(self.device)
                 target = target.to(self.device)
                 
-                output, _ = self._model(input_seq.unsqueeze(-1), hidden_state=None)
+                output, _ = self._model(input_seq, hidden_state=None)
                 val_loss = self.criterion(output.squeeze(-1), target)
                 running_val_loss += val_loss.item()
         
