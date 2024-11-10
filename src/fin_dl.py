@@ -32,10 +32,9 @@ def create_sequences(df, seq_length):
 #------------------------------------------------------------------------------------------------
 
 class DataPreprocessor:
-    def __init__(self, seq_length: int, batch_size: int, scaler = None, save_scaler_path:str = None, extra_vars:list = None):
+    def __init__(self, seq_length: int, batch_size: int, scaler = None, extra_vars:list = None):
         self.seq_length = seq_length
         self.batch_size = batch_size
-        self.save_scaler_path = save_scaler_path
         self.scaler = scaler if scaler else StandardScaler()
         self.extra_vars = extra_vars if extra_vars else []
 
@@ -60,17 +59,17 @@ class DataPreprocessor:
         
         return X, y
     
-    def preprocess_data(self, df):
+    def preprocess_data(self, df, predict=False):
         """
         Preprocess data and save scaler if a path is provided.
         """
-        df['log_return'] = self.scaler.fit_transform(df[['log_return']])
-        
-        # Save the scaler if a path is provided
-        if self.save_scaler_path:
-            self.save_scaler()
-        
+        df.loc[:, 'log_return'] = self.scaler.fit_transform(df[['log_return']])
+               
         X, y = self.create_sequences(df)
+
+        if predict:
+            input_seq = torch.tensor(X[-1], dtype=torch.float32).unsqueeze(0)
+            return input_seq
         
         train_size = int(len(X) * 0.8)
         X_train, X_test = X[:train_size], X[train_size:]
@@ -89,11 +88,6 @@ class DataPreprocessor:
         
         return train_loader, test_loader, X_train, X_test, y_train, y_test
 
-    def save_scaler(self):
-        """Save the scaler to a file after it has been fitted."""
-        with open(self.save_scaler_path, 'wb') as file:
-            pickle.dump(self.scaler, file)
-
     @property
     def scaler(self):
         return self._scaler
@@ -101,6 +95,51 @@ class DataPreprocessor:
     @scaler.setter
     def scaler(self, scaler):
         self._scaler = scaler
+
+#------------------------------------------------------------------------------------------------
+
+class Predictor:
+    def __init__(self, model, data_preprocessor, device='cpu'):
+        """
+        Init predictor.
+        
+        - model: Model to predict.
+        - data_preprocessor: Instance of DataPreprocessor.
+        - device: Device where the model will be executed ('cpu' or 'cuda').
+        """
+        self.model = model.to(device)
+        self.data_preprocessor = data_preprocessor
+        self.device = device
+
+    def predict(self, df, n_days: int, seq_length: int):
+        """
+        Make predictions for N periods ahead.
+
+        - df: DataFrame with the input data for predictions.
+        - n_days: Number of days/periods to predict.
+        - seq_length: Length of the input sequence.
+        - return: List of predictions.
+        """
+        input_seq = self.data_preprocessor.preprocess_data(df.iloc[-seq_length - 1:], predict=True).to(self.device)
+
+        predictions = []
+        hidden_state = None
+        current_input = input_seq
+
+        for _ in range(n_days):
+            with torch.no_grad():
+                output, hidden_state = self.model(current_input, hidden_state)
+
+            predicted_log_return = output.item()
+
+            predicted_value = self.data_preprocessor.scaler.inverse_transform([[predicted_log_return]])[0][0]
+
+            predictions.append(predicted_value)
+
+            current_input = torch.tensor(np.roll(current_input.cpu().numpy(), -1, axis=1), dtype=torch.float32).to(self.device)
+            current_input[0, -1, 0] = predicted_log_return
+
+        return predictions
 
 #------------------------------------------------------------------------------------------------
 
