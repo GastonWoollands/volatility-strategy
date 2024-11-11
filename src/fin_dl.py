@@ -1,5 +1,5 @@
 import torch
-import pickle
+import random
 import numpy as np
 import torch.nn as nn
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
@@ -185,7 +185,7 @@ class GRUModel(nn.Module):
 #------------------------------------------------------------------------------------------------
 
 class Trainer:
-    def __init__(self, model, train_loader, test_loader, criterion, optimizer, device, epochs=1000, early_stopping_patience=20):
+    def __init__(self, model, train_loader, test_loader, criterion, optimizer, device, epochs=1000, early_stopping_patience=20, seed=None):
         self._model = model
         self.train_loader = train_loader
         self.test_loader = test_loader
@@ -194,6 +194,17 @@ class Trainer:
         self.device = device
         self.epochs = epochs
         self.early_stopping_patience = early_stopping_patience
+        
+        if seed is not None:
+            self.set_seed(seed)
+
+    def set_seed(self, seed):
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     def train(self):
         train_losses, val_losses = [], []
