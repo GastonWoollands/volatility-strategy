@@ -63,7 +63,10 @@ class DataPreprocessor:
         """
         Preprocess data and save scaler if a path is provided.
         """
-        df.loc[:, 'log_return'] = self.scaler.fit_transform(df[['log_return']])
+        if not predict:
+            df.loc[:, 'log_return'] = self.scaler.fit_transform(df[['log_return']])
+        else:
+            df.loc[:, 'log_return'] = self.scaler.transform(df[['log_return']])
                
         X, y = self.create_sequences(df)
 
