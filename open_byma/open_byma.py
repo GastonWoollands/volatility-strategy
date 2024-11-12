@@ -69,18 +69,23 @@ class openBYMAdata:
     def get_options(self, ticker: str = None, filter_vol: bool = False) -> pd.DataFrame:
         data='{"Content-Type":"application/json"}'
         response = self.__s.post('https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/options', headers=self.__headers, data=data, verify=False)
+        
+        columns = [ "symbol", "quantityBid", "bidPrice", "offerPrice", "quantityOffer", "settlementPrice","closingPrice", "imbalance", "openingPrice", "tradingHighPrice", "tradingLowPrice",
+                    "previousClosingPrice", "volumeAmount", "volume", "numberOfOrders", "tradeHour","underlyingSymbol", "maturityDate"]
+        
+        columns_av = [col for col in columns if col in df.columns]
+        
         df = pd.DataFrame(response.json())
-        df = df[[
-            "symbol", "quantityBid", "bidPrice", "offerPrice", "quantityOffer", "settlementPrice",
-            "closingPrice", "imbalance", "openingPrice", "tradingHighPrice", "tradingLowPrice",
-            "previousClosingPrice", "volumeAmount", "volume", "numberOfOrders", "tradeHour",
-            "underlyingSymbol", "maturityDate"
-        ]].copy()
-        df.columns = [
-            'symbol', 'bid_size', 'bid', 'ask', 'ask_size', 'lastPrice', 'close', 'change', 'open', 'high', 
-            'low', 'previous_close', 'turnover', 'volume', 'operations', 'datetime', 'underlying_asset', 
-            'expiration'
-        ]
+        df = df[columns_av].copy()
+
+        df = df.rename(columns={
+            "quantityBid": "bid_size", "bidPrice": "bid", "offerPrice": "ask", "quantityOffer": "ask_size",
+            "settlementPrice": "lastPrice", "closingPrice": "close", "imbalance": "change", "openingPrice": "open",
+            "tradingHighPrice": "high", "tradingLowPrice": "low", "previousClosingPrice": "previous_close",
+            "volumeAmount": "turnover", "numberOfOrders": "operations", "tradeHour": "datetime",
+            "underlyingSymbol": "underlying_asset", "maturityDate": "expiration"
+        })
+
         df['expiration' ] = pd.to_datetime(df['expiration']).dt.strftime('%Y-%m-%d')
         df['option_type'] = df['symbol'].apply(self.__get_option_type)
         df['strike'     ] = df['symbol'].apply(self.__get_option_strike)
