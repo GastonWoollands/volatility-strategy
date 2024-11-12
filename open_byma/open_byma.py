@@ -73,9 +73,8 @@ class openBYMAdata:
         columns = [ "symbol", "quantityBid", "bidPrice", "offerPrice", "quantityOffer", "settlementPrice","closingPrice", "imbalance", "openingPrice", "tradingHighPrice", "tradingLowPrice",
                     "previousClosingPrice", "volumeAmount", "volume", "numberOfOrders", "tradeHour","underlyingSymbol", "maturityDate"]
         
-        columns_av = [col for col in columns if col in df.columns]
-        
         df = pd.DataFrame(response.json())
+        columns_av = [col for col in columns if col in df.columns]
         df = df[columns_av].copy()
 
         df = df.rename(columns={
