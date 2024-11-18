@@ -74,6 +74,10 @@ class openBYMAdata:
                     "previousClosingPrice", "volumeAmount", "volume", "numberOfOrders", "tradeHour","underlyingSymbol", "maturityDate"]
         
         df = pd.DataFrame(response.json())
+
+        if df.empty:
+            raise ValueError("Failed to fetch options data from BYMA")
+
         columns_av = [col for col in columns if col in df.columns]
         df = df[columns_av].copy()
 
@@ -96,6 +100,7 @@ class openBYMAdata:
             df = df[df.volume > 0].reset_index(drop=True).copy()
 
         return df
+    
     def get_options_history(self, ticker: str = None, filter_vol: bool = False) -> pd.DataFrame:
         """Fetch options history from github repo"""
         try:
