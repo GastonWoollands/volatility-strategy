@@ -100,3 +100,14 @@ def mcleod_li_test(residuals, k):
     p_value = 1 - chi2.cdf(test_stat, df)
     
     return test_stat, p_value
+
+#------------------------------------------------------------------------------------------------
+
+def estimate_garch(df, periods, p, q, mean, dist, vol):
+    """Train and forecast GARCH model"""
+
+    res_garch = train_garch(df, p=p, q=q, mean=mean, dist=dist, vol=vol)
+    vol_forecast = garch_forecast(res_garch, horizon=periods)
+
+    return np.sqrt(vol_forecast.variance.values[-1, :])
+
