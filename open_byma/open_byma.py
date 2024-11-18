@@ -98,12 +98,15 @@ class openBYMAdata:
         return df
     def get_options_history(self, ticker: str = None, filter_vol: bool = False) -> pd.DataFrame:
         """Fetch options history from github repo"""
-        df = pd.read_csv('https://raw.githubusercontent.com/pablojunin/options_history/refs/heads/master/opciones_historial.csv')
-        if ticker:
-            df = df[df.underlying_asset == ticker].reset_index(drop=True).copy()
-        if filter_vol:
-            df = df[df.volume > 0].reset_index(drop=True).copy()
-        return df
+        try:
+            df = pd.read_csv('https://raw.githubusercontent.com/pablojunin/options_history/refs/heads/master/opciones_historial.csv')
+            if ticker:
+                df = df[df.underlying_asset == ticker].reset_index(drop=True).copy()
+            if filter_vol:
+                df = df[df.volume > 0].reset_index(drop=True).copy()
+            return df
+        except:
+            raise ValueError("Failed to fetch options history from github repo")
 
     def get_bonds(self) -> pd.DataFrame:
         return self.__get_fixed_income('public-bonds')
