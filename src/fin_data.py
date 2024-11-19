@@ -73,7 +73,7 @@ def get_next_expiration(date, n_days, expirations):
 
 def atm_option(calls, puts, S):
     """Get the at-the-money option based on the closest strike to the spot price S."""
-    atm_call = calls.iloc[(calls['strike'] - S).abs().idxmin()] if not calls.empty else None
-    atm_put = puts.iloc[(puts['strike'] - S).abs().idxmin()] if not puts.empty else None
-    
+    atm_call = calls.iloc[(calls['strike'] - S).abs().idxmin()] if calls is not None and not calls.empty else None
+    atm_put = puts.iloc[(puts['strike'] - S).abs().idxmin()] if puts is not None and not puts.empty else None
+
     return atm_call, atm_put
