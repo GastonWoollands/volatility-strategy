@@ -170,16 +170,41 @@ class LSTMModel(nn.Module):
 #------------------------------------------------------------------------------------------------
 
 class GRUModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, device='cpu'):
+    def __init__(self, input_size, hidden_size, output_size, dropout=0.0, device='cpu'):
+        """
+        Args:
+            input_size: Input tensor dimension.
+            hidden_size: Hidden state dimension.
+            output_size: Output tensor dimension.
+            dropout: Dropout probability (0.0 if not desired).
+            device: Device where the model will run ('cpu' or 'cuda').
+        """
         super(GRUModel, self).__init__()
         self.hidden_size = hidden_size
         self.device = device
         self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else None
         self.fc = nn.Linear(hidden_size, output_size)
         self.to(self.device)
 
     def forward(self, x, hidden_state=None):
+        """
+        Args:
+            x: Input tensor.
+            hidden_state: Hidden state initial (optional).
+
+        Returns:
+            out: Output tensor.
+            hidden_state: Last hidden state of the GRU.
+        """
+        if hidden_state is None:
+            hidden_state = torch.zeros(1, x.size(0), self.hidden_size).to(self.device)
+        x = x.to(self.device)
         out, hidden_state = self.gru(x, hidden_state)
+        if self.dropout:
+            out = self.dropout(out)
+
+        # out = self.fc(out)
         out = self.fc(out[:, -1, :])
         return out, hidden_state
 
