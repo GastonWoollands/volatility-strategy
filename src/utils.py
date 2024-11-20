@@ -1,4 +1,5 @@
 import yaml
+from pathlib import Path
 
 #------------------------------------------------------------------------------------------------
 
@@ -9,33 +10,33 @@ def load_config(config_path: str):
 
 #------------------------------------------------------------------------------------------------
 
-def create_config_values():
-    """Create a dictionary with the global configuration values."""
+def create_config_values(context):
+    """Create a dictionary with the global configuration values from the given context."""
     global config_values
 
     config_values = {
         "model": {
-            "input_size": globals().get('input_size'),
-            "hidden_size": globals().get('hidden_size'),
-            "output_size": globals().get('output_size'),
-            "dropout": globals().get('dropout'),
-            "seq_length": globals().get('seq_length'),
-            "batch_size": globals().get('batch_size'),
-            "seed": globals().get('seed', 83),
-            "criterion": globals().get('criterion', "MSELoss"),
-            "optimizer": globals().get('optimizer', "Adam"),
-            "learning_rate": globals().get('learning_rate'),
-            "epochs": globals().get('epochs'),
+            "input_size": context.get('input_size', None),
+            "hidden_size": context.get('hidden_size', None),
+            "output_size": context.get('output_size', None),
+            "dropout": context.get('dropout', None),
+            "seq_length": context.get('seq_length', None),
+            "batch_size": context.get('batch_size', None),
+            "seed": context.get('seed', 83),
+            "criterion": context.get('criterion', "MSELoss"),
+            "optimizer": context.get('optimizer', "Adam"),
+            "learning_rate": context.get('learning_rate', None),
+            "epochs": context.get('epochs', None),
         },
         "data": {
-            "start_date": globals().get('start_date'),
-            "end_date": globals().get('end_date'),
-            "model_path": globals().get('save_model_path').as_posix(),
-            "scaler_path": globals().get('save_scaler_path').as_posix(),
-            "extra_vars": globals().get('extra_vars', []),
-            "early_stopping_patience": globals().get('early_stopping_patience', 50),
+            "start_date": context.get('start_date', None),
+            "end_date": context.get('end_date', None),
+            "model_path": str(context.get('save_model_path', Path()).as_posix()) if isinstance(context.get('save_model_path', None), Path) else context.get('save_model_path', None),
+            "scaler_path": str(context.get('save_scaler_path', Path()).as_posix()) if isinstance(context.get('save_scaler_path', None), Path) else context.get('save_scaler_path', None),
+            "extra_vars": context.get('extra_vars', []),
+            "early_stopping_patience": context.get('early_stopping_patience', 50),
         },
-        "metrics": {
-        }
+        "metrics": {}
     }
+    
     return config_values
