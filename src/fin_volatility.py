@@ -166,7 +166,7 @@ def get_option_metrics_expirations_byma(
         if result:
             for days, vol in historical_vols.items():
                 result[f'historical_vol_{days}'] = vol
-            results[expiration.strftime('%Y-%m-%d')] = result
+            results[expiration] = result
 
     return results
 
