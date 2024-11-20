@@ -122,7 +122,6 @@ def get_option_metrics_byma(
 
         # Compile metrics
         return {
-            "date": expiration.strftime('%Y-%m-%d'),
             "days_to_expiration": days_to_expiration,
             "asset_price": S,
             "option_type": op_type,
@@ -167,7 +166,7 @@ def get_option_metrics_expirations_byma(
         if result:
             for days, vol in historical_vols.items():
                 result[f'historical_vol_{days}'] = vol
-            results[expiration] = result
+            results[expiration.strftime('%Y-%m-%d')] = result
 
     return results
 
