@@ -7,9 +7,9 @@ from .fin_options import implied_volatility, get_greeks
 
 #------------------------------------------------------------------------------------------------
 
-def get_hist_vol(df: pd.DataFrame, periods: int = 252):
+def get_hist_vol(df: pd.DataFrame, days: int, periods: int = 252):
     """Calculates daily and annualized historical volatility."""
-    historical_vol_daily = df.iloc[-60:]["log_return"].std()
+    historical_vol_daily = df.iloc[-days:]["log_return"].std()
     historical_vol_yearly = historical_vol_daily * np.sqrt(periods)
     return round(float(historical_vol_daily), 4), round(float(historical_vol_yearly), 4)
 
@@ -123,6 +123,7 @@ def get_option_metrics_byma(
         # Compile metrics
         return {
             "date": expiration.strftime('%Y-%m-%d'),
+            "days_to_expiration": days_to_expiration,
             "asset_price": S,
             "option_type": op_type,
             "strike": K,
@@ -145,27 +146,30 @@ def get_option_metrics_byma(
 
 def get_option_metrics_expirations_byma(
     data_op: pd.DataFrame, df: pd.DataFrame, predicted_volatility: np.array, 
-    predicted_volatility_gru: np.array, op_type: str = "P", r: float = 0.0256, periods: int = 252
-):
+    predicted_volatility_gru: np.array, op_type: str = "P", r: float = 0.0256, periods: int = 252):
+
     """Calculates volatility results for all expiration dates."""
     today = pd.Timestamp.today()
+
     expirations = sorted(list(set(data_op.expiration)))
 
     S = df.Close.iloc[-1].item()
-    vol_daily_hist, _ = get_hist_vol(df, periods)
+    historical_vols = {10: None, 20: None, 30: None, 60: None}
+    for days in historical_vols.keys():
+        historical_vols[days], _ = get_hist_vol(df, days, periods)
 
-    results = []
+    results = {}
     for expiration in expirations:
         result = get_option_metrics_byma(
             expiration, S, today, periods, op_type, r, predicted_volatility, 
             predicted_volatility_gru, data_op
         )
         if result:
-            results.append(result)
+            for days, vol in historical_vols.items():
+                result[f'historical_vol_{days}'] = vol
+            results[expiration] = result
 
-    results_df = pd.DataFrame(results)
-    results_df["historical_vol"] = vol_daily_hist
-    return results_df
+    return results
 
 #------------------------------------------------------------------------------------------------
 
