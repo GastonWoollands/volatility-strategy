@@ -22,11 +22,12 @@ def create_config_values(context):
             "dropout": context.get('dropout', None),
             "seq_length": context.get('seq_length', None),
             "batch_size": context.get('batch_size', None),
-            "seed": context.get('seed', 83),
-            "criterion": context.get('criterion', "MSELoss"),
-            "optimizer": context.get('optimizer', "Adam"),
+            "seed": context.get('seed', None),
+            "criterion": context.get('criterion', None),
+            "optimizer": context.get('optimizer', None),
             "learning_rate": context.get('learning_rate', None),
             "epochs": context.get('epochs', None),
+            "weight_decay": context.get('weight_decay', None),
         },
         "data": {
             "start_date": context.get('start_date', None),
@@ -34,7 +35,7 @@ def create_config_values(context):
             "model_path": str(context.get('save_model_path', Path()).as_posix()) if isinstance(context.get('save_model_path', None), Path) else context.get('save_model_path', None),
             "scaler_path": str(context.get('save_scaler_path', Path()).as_posix()) if isinstance(context.get('save_scaler_path', None), Path) else context.get('save_scaler_path', None),
             "extra_vars": context.get('extra_vars', []),
-            "early_stopping_patience": context.get('early_stopping_patience', 50),
+            "early_stopping_patience": context.get('early_stopping_patience', None),
         },
         "metrics": {}
     }
