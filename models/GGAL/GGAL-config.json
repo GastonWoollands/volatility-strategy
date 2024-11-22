@@ -1,0 +1,22 @@
+{
+    "model": {
+        "input_size": 2,
+        "hidden_size": 100,
+        "output_size": 1,
+        "dropout": 0.2,
+        "seq_length": 150,
+        "batch_size": 500,
+        "seed": 83,
+        "learning_rate": 0.001,
+        "epochs": 1000,
+        "weight_decay": 1e-05
+    },
+    "data": {
+        "model_path": "/mnt/c/Users/Gwool/OneDrive/projects/quant/volatility-strategy/models/GGAL/GGAL-model-v2.36.pth",
+        "scaler_path": "/mnt/c/Users/Gwool/OneDrive/projects/quant/volatility-strategy/models/GGAL/GGAL-scaler-v2.36.pkl",
+        "extra_vars": [
+            "gob"
+        ],
+        "early_stopping_patience": 80
+    }
+}
