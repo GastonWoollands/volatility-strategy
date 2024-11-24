@@ -2,8 +2,9 @@ import torch
 import random
 import numpy as np
 import torch.nn as nn
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
 #------------------------------------------------------------------------------------------------
@@ -32,28 +33,37 @@ def create_sequences(df, seq_length):
 #------------------------------------------------------------------------------------------------
 
 class DataPreprocessor:
-    def __init__(self, seq_length: int, batch_size: int, scaler = None, extra_vars:list = None):
+    def __init__(self, seq_length: int, batch_size: int, scaler = None, extra_vars:list = None, output_size: int = 1):
         self.seq_length = seq_length
         self.batch_size = batch_size
         self.scaler = scaler if scaler else StandardScaler()
         self.extra_vars = extra_vars if extra_vars else []
+        self.output_size = output_size
 
     def create_sequences(self, df):
         """
-        Create sequences of logarithmic returns and their associated volatility,
-        including additional variables if specified.
+        Crea secuencias de entrada (X) y etiquetas de salida (y) para el modelo.
+
+        Args:
+            df: DataFrame con las columnas necesarias para crear secuencias.
+
+        Returns:
+            X: Secuencias de entrada.
+            y: Etiquetas de salida con múltiples días.
         """
         X, y = [], []
-        for i in range(len(df) - self.seq_length):
+        for i in range(len(df) - self.seq_length - self.output_size + 1):
             sequence = df['log_return'].iloc[i:i + self.seq_length].values.reshape(-1, 1)
-            
+
             if self.extra_vars:
                 extra_data = df[self.extra_vars].iloc[i:i + self.seq_length].values
                 sequence = np.concatenate([sequence, extra_data], axis=1)
 
             X.append(sequence)
-            y.append(df['log_return'].iloc[i + self.seq_length])
-        
+
+            target = df['log_return'].iloc[i + self.seq_length:i + self.seq_length + self.output_size].values
+            y.append(target)
+
         X = np.array(X)
         y = np.array(y)
         
@@ -127,23 +137,22 @@ class Predictor:
         input_seq = self.data_preprocessor.preprocess_data(df.iloc[-seq_length - 1:], predict=True).to(self.device)
 
         predictions = []
-        hidden_state = None
-        current_input = input_seq
 
-        for _ in range(n_days):
+        if self.data_preprocessor.output_size >= n_days:
             with torch.no_grad():
-                output, hidden_state = self.model(current_input, hidden_state)
+                output, _ = self.model(input_seq)
+                predictions.append(output.squeeze().cpu().numpy())
+        else:
+            hidden_state = None
+            for _ in range(n_days):
+                with torch.no_grad():
+                    output, hidden_state = self.model(input_seq, hidden_state)
+                    predictions.append(output.item())
 
-            predicted_log_return = output.item()
+                    output_expanded = output.view(1, 1, -1).expand(1, 1, input_seq.size(-1))
+                    input_seq = torch.cat((input_seq[:, 1:, :], output_expanded), dim=1)
 
-            predicted_value = self.data_preprocessor.scaler.inverse_transform([[predicted_log_return]])[0][0]
-
-            predictions.append(predicted_value)
-
-            current_input = torch.tensor(np.roll(current_input.cpu().numpy(), -1, axis=1), dtype=torch.float32).to(self.device)
-            current_input[0, -1, 0] = predicted_log_return
-
-        return predictions
+        return np.array(predictions)
 
 #------------------------------------------------------------------------------------------------
 
@@ -250,7 +259,8 @@ class Trainer:
                 hidden_state = None
                 output, hidden_state = self._model(input_seq, hidden_state)
 
-                loss = self.criterion(output.squeeze(-1), target)
+                # loss = self.criterion(output.squeeze(-1), target)
+                loss = self.criterion(output, target)
                 loss.backward()
                 self.optimizer.step()
                 
@@ -288,7 +298,8 @@ class Trainer:
                 target = target.to(self.device)
                 
                 output, _ = self._model(input_seq, hidden_state=None)
-                val_loss = self.criterion(output.squeeze(-1), target)
+                # val_loss = self.criterion(output.squeeze(-1), target)
+                val_loss = self.criterion(output, target)
                 running_val_loss += val_loss.item()
         
         avg_val_loss = running_val_loss / len(self.test_loader)
@@ -357,3 +368,43 @@ class Trainer:
     @early_stopping_patience.setter
     def early_stopping_patience(self, value):
         self._early_stopping_patience = value
+
+#------------------------------------------------------------------------------------------------
+
+def predict_and_evaluate(model, X_test, y_test, device, output_size, scaler, df):
+    """
+    Predict and evaluate the model.
+    """
+    predictions = []
+    true_values = []
+    hidden_state = None
+
+    with torch.no_grad():
+        for i in range(len(X_test)):
+            input_seq = X_test[i].unsqueeze(0).to(device)
+            target = y_test[i].to(device)
+
+            if output_size > 1:  
+                output, hidden_state = model(input_seq, hidden_state)
+                predictions.append(output.squeeze(0).cpu().numpy())
+                true_values.append(target.cpu().numpy())
+            else:
+                output, hidden_state = model(input_seq, hidden_state)
+                predictions.append(output.item())
+                true_values.append(target.item())
+
+                output_expanded = output.view(1, 1, -1).expand(1, 1, input_seq.size(-1))
+                input_seq = torch.cat((input_seq[:, 1:, :], output_expanded), dim=1)
+
+    predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).reshape(-1, output_size)
+    true_values = scaler.inverse_transform(np.array(true_values).reshape(-1, 1)).reshape(-1, output_size)
+
+
+    mse = mean_squared_error(true_values.flatten(), predictions.flatten())
+    mae = mean_absolute_error(true_values.flatten(), predictions.flatten())
+    r2 = r2_score(true_values.flatten(), predictions.flatten())
+
+    mse_per_prediction = [mean_squared_error(true_values[i].flatten(), predictions[i].flatten()) for i in range(len(predictions))]
+    mae_per_prediction = [mean_absolute_error(true_values[i].flatten(), predictions[i].flatten()) for i in range(len(predictions))]
+
+    return mse, mae, r2, mse_per_prediction, mae_per_prediction, true_values, predictions
