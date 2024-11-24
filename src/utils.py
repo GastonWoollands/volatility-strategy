@@ -28,6 +28,7 @@ def create_config_values(context):
             "learning_rate": context.get('learning_rate', None),
             "epochs": context.get('epochs', None),
             "weight_decay": context.get('weight_decay', None),
+            "n_days": context.get('n_days', None),
         },
         "data": {
             "start_date": context.get('start_date', None),
