@@ -17,21 +17,6 @@ def calculate_volatility(df, window=30):
 
 #------------------------------------------------------------------------------------------------
 
-def create_sequences(df, seq_length):
-    X = []
-    y = []
-    
-    for i in range(len(df) - seq_length):
-        X.append(df['log_return'].iloc[i:i+seq_length].values)
-        y.append(df['log_return'].iloc[i + seq_length])
-    
-    X = np.array(X)
-    y = np.array(y)
-    
-    return X, y
-
-#------------------------------------------------------------------------------------------------
-
 class DataPreprocessor:
     def __init__(self, seq_length: int, batch_size: int, scaler = None, extra_vars:list = None, output_size: int = 1):
         self.seq_length = seq_length
@@ -142,8 +127,6 @@ class Predictor:
         input_seq = self.data_preprocessor.preprocess_data(_df, predict=True).to(self.device)
 
         predictions = []
-        hidden_state = None
-        current_input = input_seq
 
         if self.data_preprocessor.output_size >= n_days:
             with torch.no_grad():
@@ -231,17 +214,16 @@ class Trainer:
         for epoch in range(self.epochs):
             self._model.train()
             running_train_loss = 0
-            
+            hidden_state = None  
+
             for input_seq, target in self.train_loader:
                 input_seq = input_seq.to(self.device)
                 target = target.to(self.device)
                 
                 self.optimizer.zero_grad()
                 
-                hidden_state = None
                 output, hidden_state = self._model(input_seq, hidden_state)
 
-                # loss = self.criterion(output.squeeze(-1), target)
                 loss = self.criterion(output, target)
                 loss.backward()
                 self.optimizer.step()
@@ -251,7 +233,7 @@ class Trainer:
             avg_train_loss = running_train_loss / len(self.train_loader)
             train_losses.append(avg_train_loss)
             
-            # Validación
+            # Validation
             val_loss = self.validate()
             val_losses.append(val_loss)
             
