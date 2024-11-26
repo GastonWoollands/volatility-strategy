@@ -73,13 +73,15 @@ class DataPreprocessor:
         """
         Preprocess data and save scaler if a path is provided.
         """
+        _df = df.copy()
+
         if not predict:
-            df.loc[:, 'log_return'] = self.scaler.fit_transform(df[['log_return']]).astype(np.float64)
+            _df.loc[:, 'log_return'] = self.scaler.fit_transform(df[['log_return']]).astype(np.float64)
         else:
             transformed_data = self.scaler.transform(df[['log_return']])
-            df.loc[:, 'log_return'] = transformed_data.flatten().astype(np.float64)
+            _df.loc[:, 'log_return'] = transformed_data.flatten().astype(np.float64)
                
-        X, y = self.create_sequences(df)
+        X, y = self.create_sequences(_df)
 
         if predict:
             input_seq = torch.tensor(X[-1], dtype=torch.float32).unsqueeze(0)
@@ -127,54 +129,34 @@ class Predictor:
 
     def predict(self, df, n_days: int, seq_length: int):
         """
-        Make predictions for N periods ahead.
+        Make predictions for N periods ahead, supporting models with output_size > 1.
 
         - df: DataFrame with the input data for predictions.
         - n_days: Number of days/periods to predict.
         - seq_length: Length of the input sequence.
-        - return: List of predictions.
+        - return: Array with the inverse-scaled predictions.
         """
-        input_seq = self.data_preprocessor.preprocess_data(df.iloc[-seq_length - 1:], predict=True).to(self.device)
+
+        _df = df.iloc[-(seq_length + self.data_preprocessor.output_size):].copy()
+
+        input_seq = self.data_preprocessor.preprocess_data(_df, predict=True).to(self.device)
 
         predictions = []
+        hidden_state = None
+        current_input = input_seq
 
         if self.data_preprocessor.output_size >= n_days:
             with torch.no_grad():
                 output, _ = self.model(input_seq)
                 predictions.append(output.squeeze().cpu().numpy())
         else:
-            hidden_state = None
-            for _ in range(n_days):
-                with torch.no_grad():
-                    output, hidden_state = self.model(input_seq, hidden_state)
-                    predictions.append(output.item())
+            raise ValueError(f"Output size {self.data_preprocessor.output_size} is less than the number of days to predict {n_days}")
 
-                    output_expanded = output.view(1, 1, -1).expand(1, 1, input_seq.size(-1))
-                    input_seq = torch.cat((input_seq[:, 1:, :], output_expanded), dim=1)
+        # Flatten predictions and apply inverse scaling
+        predictions = np.concatenate(predictions, axis=0)[:n_days]
+        pred_gru = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, self.data_preprocessor.output_size))
 
-        return np.array(predictions)
-
-#------------------------------------------------------------------------------------------------
-
-class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super(LSTMModel, self).__init__()
-        self.hidden_size = hidden_size
-        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        self.fc   = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x, hidden_state=None):        
-        if hidden_state is None:
-            h0 = torch.zeros(1, x.size(0), self.hidden_size).to(x.device)
-            c0 = torch.zeros(1, x.size(0), self.hidden_size).to(x.device)
-        else:
-            h0, c0 = hidden_state
-        
-        lstm_out, (h_n, c_n) = self.lstm(x, (h0, c0))
-        
-        out = self.fc(lstm_out[:, -1, :])
-        
-        return out, (h_n, c_n)
+        return pred_gru.flatten()
     
 #------------------------------------------------------------------------------------------------
 
