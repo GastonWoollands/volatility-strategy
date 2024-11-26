@@ -128,16 +128,23 @@ class Predictor:
 
         predictions = []
 
-        if self.data_preprocessor.output_size >= n_days:
+        if self.data_preprocessor.output_size == 1:
             with torch.no_grad():
                 output, _ = self.model(input_seq)
-                predictions.append(output.squeeze().cpu().numpy())
+                predictions.append(output.item())
         else:
-            raise ValueError(f"Output size {self.data_preprocessor.output_size} is less than the number of days to predict {n_days}")
+            if self.data_preprocessor.output_size >= n_days:
+                with torch.no_grad():
+                    output, _ = self.model(input_seq)
+                    predictions.append(output.squeeze().cpu().numpy())
+            else:
+                raise ValueError(f"Output size {self.data_preprocessor.output_size} is less than the number of days to predict {n_days}")
 
-        # Flatten predictions and apply inverse scaling
         predictions = np.concatenate(predictions, axis=0)[:n_days]
-        pred_gru = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, self.data_preprocessor.output_size))
+        if self.data_preprocessor.output_size == 1:
+            pred_gru = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, 1))
+        else:
+            pred_gru = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, self.data_preprocessor.output_size))
 
         return pred_gru.flatten()
     
