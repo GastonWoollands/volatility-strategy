@@ -192,8 +192,8 @@ class GRUModel(nn.Module):
 #------------------------------------------------------------------------------------------------
 
 class Trainer:
-    def __init__(self, model, train_loader, test_loader, criterion, optimizer, device, epochs=1000, early_stopping_patience=20, seed=None):
-        self._model = model
+    def __init__(self, model, train_loader, test_loader, criterion, optimizer, device: str, epochs: int=1000, early_stopping_patience: int=20, seed: int=None, debug:bool=False):
+        self.model = model
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.criterion = criterion
@@ -201,7 +201,7 @@ class Trainer:
         self.device = device
         self.epochs = epochs
         self.early_stopping_patience = early_stopping_patience
-        
+        self.debug = debug
         if seed is not None:
             self.set_seed(seed)
 
@@ -219,32 +219,27 @@ class Trainer:
         epochs_without_improvement = 0
         
         for epoch in range(self.epochs):
-            self._model.train()
+            self.model.train()
             running_train_loss = 0
-            hidden_state = None  
 
             for input_seq, target in self.train_loader:
-                input_seq = input_seq.to(self.device)
-                target = target.to(self.device)
-                
+                input_seq, target = input_seq.to(self.device), target.to(self.device)
                 self.optimizer.zero_grad()
-                
-                output, hidden_state = self._model(input_seq, hidden_state)
-
+                output, _ = self.model(input_seq, hidden_state=None)
                 loss = self.criterion(output, target)
                 loss.backward()
+                if self.debug:
+                    for name, param in self.model.named_parameters():
+                        if param.grad is not None:
+                            print(f'{name} grad: {param.grad}')
                 self.optimizer.step()
-                
                 running_train_loss += loss.item()
             
             avg_train_loss = running_train_loss / len(self.train_loader)
             train_losses.append(avg_train_loss)
-            
-            # Validation
             val_loss = self.validate()
             val_losses.append(val_loss)
             
-            # Early stopping
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 epochs_without_improvement = 0
@@ -261,21 +256,17 @@ class Trainer:
         return train_losses, val_losses
     
     def validate(self):
-        self._model.eval()
+        self.model.eval()
         running_val_loss = 0
         with torch.no_grad():
             for input_seq, target in self.test_loader:
-                input_seq = input_seq.to(self.device)
-                target = target.to(self.device)
-                
-                output, _ = self._model(input_seq, hidden_state=None)
-                # val_loss = self.criterion(output.squeeze(-1), target)
+                input_seq, target = input_seq.to(self.device), target.to(self.device)
+                output, _ = self.model(input_seq, hidden_state=None)
                 val_loss = self.criterion(output, target)
                 running_val_loss += val_loss.item()
         
         avg_val_loss = running_val_loss / len(self.test_loader)
         return avg_val_loss
-
     @property
     def model(self):
         return self._model
@@ -379,3 +370,57 @@ def predict_and_evaluate(model, X_test, y_test, device, output_size, scaler, df)
     mae_per_prediction = [mean_absolute_error(true_values[i].flatten(), predictions[i].flatten()) for i in range(len(predictions))]
 
     return mse, mae, r2, mse_per_prediction, mae_per_prediction, true_values, predictions
+
+#------------------------------------------------------------------------------------------------
+
+class MultiModelPredictor:
+    def __init__(self, models: dict, data_preprocessor: DataPreprocessor, device: str = 'cpu'):
+        """
+        Predictor for multiple models with different horizons.
+
+        - models: Dictionary with models and their prediction horizons. 
+                  Example: {5: model_5, 10: model_10, 20: model_20, 30: model_30}
+        - data_preprocessor: Instance of DataPreprocessor.
+        - device: Device where the models will be executed ('cpu' or 'cuda').
+        """
+        self.models = {int(k): v.to(device) for k, v in models.items()}
+        self.data_preprocessor = data_preprocessor
+        self.device = device
+
+    def predict(self, df, n_days: int, seq_length: int):
+        """
+        Make predictions for n days using the appropriate model.
+
+        - df: DataFrame with the input data.
+        - n_days: Number of days to predict.
+        - seq_length: Length of the input sequence.
+        - return: Array with the inverse-scaled predictions.
+        """
+        if n_days not in self.models:
+            raise ValueError(f"No model available for {n_days} days. Available models: {list(self.models.keys())}")
+
+        model = self.models[n_days]
+        _df = df.iloc[-(seq_length + self.data_preprocessor.output_size):].copy()
+
+        input_seq = self.data_preprocessor.preprocess_data(_df, predict=True).to(self.device)
+
+        with torch.no_grad():
+            output, _ = model(input_seq)
+            predictions = output.squeeze().cpu().numpy()
+
+        predictions = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, self.data_preprocessor.output_size)).flatten()
+
+        return predictions
+
+    def predict_all(self, df, seq_length: int):
+        """
+        Make predictions for all available horizons and return them in a dictionary.
+
+        - df: DataFrame with the input data.
+        - seq_length: Length of the input sequence.
+        - return: Dictionary with predictions for each horizon.
+        """
+        results = {}
+        for n_days in sorted(self.models.keys()):
+            results[n_days] = self.predict(df, n_days, seq_length)
+        return results
