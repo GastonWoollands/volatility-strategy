@@ -408,19 +408,18 @@ class MultiModelPredictor:
             output, _ = model(input_seq)
             predictions = output.squeeze().cpu().numpy()
 
-        predictions = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, self.data_preprocessor.output_size)).flatten()
+        if predictions.size % n_days != 0:
+            raise ValueError(f"Cannot reshape predictions of size {predictions.size} into shape (-1, {n_days})")
 
+        predictions = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, n_days)).flatten()
         return predictions
 
     def predict_all(self, df, seq_length: int):
-        """
-        Make predictions for all available horizons and return them in a dictionary.
-
-        - df: DataFrame with the input data.
-        - seq_length: Length of the input sequence.
-        - return: Dictionary with predictions for each horizon.
-        """
+        """Predictions for all horizons"""
         results = {}
         for n_days in sorted(self.models.keys()):
-            results[n_days] = self.predict(df, n_days, seq_length)
+            try:
+                results[n_days] = self.predict(df, n_days, seq_length)
+            except ValueError as e:
+                print(f"Skipping predictions for {n_days} days due to error: {e}")
         return results
