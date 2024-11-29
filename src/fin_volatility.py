@@ -117,7 +117,8 @@ def get_option_metrics_byma(
 
         index = days_to_expiration - 1
 
-        pred_vol, pred_vol_gru = predicted_volatility[index].item(), predicted_volatility_gru[index].item()
+        pred_vol = predicted_volatility[index].item() if index < len(predicted_volatility) else np.nan
+        pred_vol_gru = predicted_volatility_gru[index].item() if index < len(predicted_volatility_gru) else np.nan
         delta, gamma, vega, theta, rho = get_greeks(op_type, S, K, _T, r, imp_vol / 100)
 
         # Compile metrics
