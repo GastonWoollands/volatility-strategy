@@ -27,14 +27,14 @@ class DataPreprocessor:
 
     def create_sequences(self, df):
         """
-        Crea secuencias de entrada (X) y etiquetas de salida (y) para el modelo.
+        Creates input sequences (X) and output labels (y) for the model.
 
         Args:
-            df: DataFrame con las columnas necesarias para crear secuencias.
+            df: DataFrame with the necessary columns to create sequences.
 
         Returns:
-            X: Secuencias de entrada.
-            y: Etiquetas de salida con múltiples días.
+            X: Input sequences.
+            y: Output labels with multiple days.
         """
         X, y = [], []
         for i in range(len(df) - self.seq_length - self.output_size + 1):
@@ -56,7 +56,7 @@ class DataPreprocessor:
     
     def preprocess_data(self, df, predict=False):
         """
-        Preprocess data and save scaler if a path is provided.
+        Preprocesses data and saves scaler if a path is provided.
         """
         _df = df.copy()
 
@@ -333,7 +333,7 @@ class Trainer:
 
 #------------------------------------------------------------------------------------------------
 
-def predict_and_evaluate(model, X_test, y_test, device, output_size, scaler, df):
+def predict_and_evaluate(model, X_test, y_test, device, output_size, scaler):
     """
     Predict and evaluate the model.
     """
