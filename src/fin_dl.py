@@ -1,5 +1,6 @@
 import torch
 import random
+import logging
 import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -192,12 +193,13 @@ class GRUModel(nn.Module):
 #------------------------------------------------------------------------------------------------
 
 class Trainer:
-    def __init__(self, model, train_loader, test_loader, criterion, optimizer, device: str, epochs: int=1000, early_stopping_patience: int=20, seed: int=None, debug:bool=False):
+    def __init__(self, model, train_loader, test_loader, criterion, optimizer, scheduler, device: str, epochs: int=1000, early_stopping_patience: int=20, seed: int=None, debug:bool=False):
         self.model = model
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
         self.epochs = epochs
         self.early_stopping_patience = early_stopping_patience
@@ -225,21 +227,26 @@ class Trainer:
             for input_seq, target in self.train_loader:
                 input_seq, target = input_seq.to(self.device), target.to(self.device)
                 self.optimizer.zero_grad()
-                output, _ = self.model(input_seq, hidden_state=None)
+                output, hidden_state = self.model(input_seq, hidden_state=None)
                 loss = self.criterion(output, target)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 if self.debug:
                     for name, param in self.model.named_parameters():
                         if param.grad is not None:
-                            print(f'{name} grad: {param.grad}')
+                            logging.info(f'{name} grad: {param.grad}')
                 self.optimizer.step()
                 running_train_loss += loss.item()
-            
+                hidden_state = hidden_state.detach()
+
             avg_train_loss = running_train_loss / len(self.train_loader)
             train_losses.append(avg_train_loss)
             val_loss = self.validate()
             val_losses.append(val_loss)
             
+            if self.scheduler is not None:
+                self.scheduler.step(val_loss)
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 epochs_without_improvement = 0
@@ -247,11 +254,11 @@ class Trainer:
                 epochs_without_improvement += 1
                 
             if epochs_without_improvement >= self.early_stopping_patience:
-                print(f"Early stopping at epoch {epoch+1}")
+                logging.info(f"Early stopping at epoch {epoch+1}")
                 break
             
             if epoch % 10 == 0:
-                print(f'Epoch {epoch+1}/{self.epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}')
+                logging.info(f'Epoch {epoch+1}/{self.epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}')
         
         return train_losses, val_losses
     
