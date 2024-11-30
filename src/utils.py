@@ -22,6 +22,8 @@ def create_config_values(context):
             "dropout": context.get('dropout', None),
             "seq_length": context.get('seq_length', None),
             "batch_size": context.get('batch_size', None),
+            "num_layers": context.get('num_layers', None),
+            "bidirectional": context.get('bidirectional', None),
             "seed": context.get('seed', None),
             "criterion": context.get('criterion', None),
             "optimizer": context.get('optimizer', None),
