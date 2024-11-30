@@ -152,7 +152,7 @@ class Predictor:
 #------------------------------------------------------------------------------------------------
 
 class GRUModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, dropout=0.0, device='cpu'):
+    def __init__(self, input_size, hidden_size, num_layers: int=2, bidirectional:bool =False, output_size:int = 1, dropout:float=0.0, device='cpu'):
         """
         Args:
             input_size: Input tensor dimension.
@@ -164,9 +164,14 @@ class GRUModel(nn.Module):
         super(GRUModel, self).__init__()
         self.hidden_size = hidden_size
         self.device = device
-        self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
+        self.gru = nn.GRU(
+            input_size, hidden_size, num_layers=num_layers, dropout=dropout, 
+            batch_first=True, bidirectional=bidirectional
+        )
+        num_directions = 2 if bidirectional else 1
+        self.layer_norm = nn.LayerNorm(hidden_size * num_directions)
         self.dropout = nn.Dropout(dropout) if dropout > 0 else None
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Linear(hidden_size * num_directions, output_size)
         self.to(self.device)
 
     def forward(self, x, hidden_state=None):
@@ -179,14 +184,16 @@ class GRUModel(nn.Module):
             out: Output tensor.
             hidden_state: Last hidden state of the GRU.
         """
+        num_directions = 2 if self.gru.bidirectional else 1
         if hidden_state is None:
-            hidden_state = torch.zeros(1, x.size(0), self.hidden_size).to(self.device)
+            hidden_state = torch.zeros(
+                num_directions * self.gru.num_layers, x.size(0), self.hidden_size
+            ).to(self.device)
         x = x.to(self.device)
-        out, hidden_state = self.gru(x, hidden_state)
+        out, hidden_state = self.gru(x, hidden_state.detach())
+        out = self.layer_norm(out)
         if self.dropout:
             out = self.dropout(out)
-
-        # out = self.fc(out)
         out = self.fc(out[:, -1, :])
         return out, hidden_state
 
@@ -254,11 +261,11 @@ class Trainer:
                 epochs_without_improvement += 1
                 
             if epochs_without_improvement >= self.early_stopping_patience:
-                logging.info(f"Early stopping at epoch {epoch+1}")
+                print(f"Early stopping at epoch {epoch+1}")
                 break
             
             if epoch % 10 == 0:
-                logging.info(f'Epoch {epoch+1}/{self.epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}')
+                print(f'Epoch {epoch+1}/{self.epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}')
         
         return train_losses, val_losses
     
