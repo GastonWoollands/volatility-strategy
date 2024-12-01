@@ -31,14 +31,14 @@ def create_config_values(context):
             "epochs": context.get('epochs', None),
             "weight_decay": context.get('weight_decay', None),
             "n_days": context.get('n_days', None),
+            "early_stopping_patience": context.get('early_stopping_patience', None),
+            "extra_vars": context.get('extra_vars', None)
         },
         "data": {
             "start_date": context.get('start_date', None),
             "end_date": context.get('end_date', None),
             "model_path": str(context.get('save_model_path', Path()).as_posix()) if isinstance(context.get('save_model_path', None), Path) else context.get('save_model_path', None),
             "scaler_path": str(context.get('save_scaler_path', Path()).as_posix()) if isinstance(context.get('save_scaler_path', None), Path) else context.get('save_scaler_path', None),
-            "extra_vars": context.get('extra_vars', []),
-            "early_stopping_patience": context.get('early_stopping_patience', None),
         },
         "metrics": {}
     }
