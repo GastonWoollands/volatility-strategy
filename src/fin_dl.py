@@ -19,7 +19,7 @@ def calculate_volatility(df, window=30):
 #------------------------------------------------------------------------------------------------
 
 class DataPreprocessor:
-    def __init__(self, seq_length: int, batch_size: int, scaler = None, extra_vars:list = None, output_size: int = 1):
+    def __init__(self, seq_length: int, batch_size: int = None, scaler = None, extra_vars:list = None, output_size: int = 1):
         self.seq_length = seq_length
         self.batch_size = batch_size
         self.scaler = scaler if scaler else StandardScaler()
