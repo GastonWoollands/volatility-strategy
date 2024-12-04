@@ -104,7 +104,7 @@ class Predictor:
     def __init__(self, model, data_preprocessor, device='cpu'):
         """
         Init predictor.
-        
+
         - model: Model to predict.
         - data_preprocessor: Instance of DataPreprocessor.
         - device: Device where the model will be executed ('cpu' or 'cuda').
@@ -115,40 +115,35 @@ class Predictor:
 
     def predict(self, df, n_days: int, seq_length: int):
         """
-        Make predictions for N periods ahead, supporting models with output_size > 1.
-
-        - df: DataFrame with the input data for predictions.
-        - n_days: Number of days/periods to predict.
-        - seq_length: Length of the input sequence.
-        - return: Array with the inverse-scaled predictions.
+        Make predictions for N periods ahead, concatenating predictions if output_size == 1.
         """
-
-        _df = df.iloc[-(seq_length + self.data_preprocessor.output_size):].copy()
-
+        required_length = seq_length + max(self.data_preprocessor.output_size, n_days)
+        if len(df) < required_length:
+            raise ValueError(f"Insufficient data for prediction. Required: {required_length}, Available: {len(df)}")
+        
+        _df = df.iloc[-seq_length - self.data_preprocessor.output_size:].copy()
         input_seq = self.data_preprocessor.preprocess_data(_df, predict=True).to(self.device)
 
+        self.model.eval()
         predictions = []
 
-        if self.data_preprocessor.output_size == 1:
-            with torch.no_grad():
-                output, _ = self.model(input_seq)
-                predictions.append(output.item())
-        else:
-            if self.data_preprocessor.output_size >= n_days:
-                with torch.no_grad():
+        with torch.no_grad():
+            if self.data_preprocessor.output_size == 1:
+                for _ in range(n_days):
                     output, _ = self.model(input_seq)
-                    predictions.append(output.squeeze().cpu().numpy())
+                    pred = output.item()
+                    predictions.append(pred)
+
+                    input_seq = torch.cat(
+                        [input_seq[:, 1:, :], torch.tensor([[[pred]]]).to(self.device)], dim=1
+                    )
             else:
-                raise ValueError(f"Output size {self.data_preprocessor.output_size} is less than the number of days to predict {n_days}")
+                raise ValueError(f"Output size {self.data_preprocessor.output_size} not supported")
 
-        predictions = np.concatenate(predictions, axis=0)[:n_days]
-        if self.data_preprocessor.output_size == 1:
-            pred_gru = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, 1))
-        else:
-            pred_gru = self.data_preprocessor.scaler.inverse_transform(predictions.reshape(-1, self.data_preprocessor.output_size))
+        predictions = np.array(predictions).reshape(-1, 1)
+        pred_gru = self.data_preprocessor.scaler.inverse_transform(predictions)
 
-        return pred_gru.flatten()
-    
+        return pred_gru.flatten()    
 #------------------------------------------------------------------------------------------------
 
 class GRUModel(nn.Module):
