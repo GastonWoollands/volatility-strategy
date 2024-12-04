@@ -170,7 +170,6 @@ class GRUModel(nn.Module):
         )
         num_directions = 2 if bidirectional else 1
         self.layer_norm = nn.LayerNorm(hidden_size * num_directions)
-        # self.dropout = nn.Dropout(dropout) if dropout > 0 else None
         self.fc = nn.Linear(hidden_size * num_directions, output_size)
         self.to(self.device)
 
@@ -192,8 +191,6 @@ class GRUModel(nn.Module):
         x = x.to(self.device)
         out, hidden_state = self.gru(x, hidden_state.detach())
         out = self.layer_norm(out)
-        # if self.dropout:
-        #     out = self.dropout(out)
         out = self.fc(out[:, -1, :])
         return out, hidden_state
 
