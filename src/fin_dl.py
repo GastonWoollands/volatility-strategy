@@ -3,8 +3,8 @@ import random
 import logging
 import numpy as np
 import torch.nn as nn
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
@@ -152,7 +152,7 @@ class Predictor:
 #------------------------------------------------------------------------------------------------
 
 class GRUModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers: int=2, bidirectional:bool =False, output_size:int = 1, dropout:float=0.0, device='cpu'):
+    def __init__(self, input_size, hidden_size, num_layers: int=2, bidirectional:bool=False, output_size:int = 1, dropout:float=0.0, device='cpu'):
         """
         Args:
             input_size: Input tensor dimension.
@@ -170,7 +170,7 @@ class GRUModel(nn.Module):
         )
         num_directions = 2 if bidirectional else 1
         self.layer_norm = nn.LayerNorm(hidden_size * num_directions)
-        self.dropout = nn.Dropout(dropout) if dropout > 0 else None
+        # self.dropout = nn.Dropout(dropout) if dropout > 0 else None
         self.fc = nn.Linear(hidden_size * num_directions, output_size)
         self.to(self.device)
 
@@ -192,8 +192,8 @@ class GRUModel(nn.Module):
         x = x.to(self.device)
         out, hidden_state = self.gru(x, hidden_state.detach())
         out = self.layer_norm(out)
-        if self.dropout:
-            out = self.dropout(out)
+        # if self.dropout:
+        #     out = self.dropout(out)
         out = self.fc(out[:, -1, :])
         return out, hidden_state
 
