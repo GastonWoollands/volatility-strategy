@@ -32,7 +32,7 @@ def create_config_values(context):
             "weight_decay": context.get('weight_decay', None),
             "n_days": context.get('n_days', None),
             "early_stopping_patience": context.get('early_stopping_patience', None),
-            "extra_vars": context.get('extra_vars', None)
+            "extra_vars": context.get('extra_vars', None),
         },
         "data": {
             "start_date": context.get('start_date', None),
