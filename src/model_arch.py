@@ -110,4 +110,3 @@ def estimate_garch(df, periods, p, q, mean, dist, vol):
     vol_forecast = garch_forecast(res_garch, horizon=periods)
 
     return np.sqrt(vol_forecast.variance.values[-1, :])
-
