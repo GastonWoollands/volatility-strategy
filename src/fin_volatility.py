@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Union
 from datetime import datetime
+import matplotlib.pyplot as plt
 from .fin_data import atm_option
 from .fin_options import implied_volatility, get_greeks
 
@@ -184,3 +185,70 @@ def filter_options_byma(data_options: pd.DataFrame, expiration, option_type: str
     filtered_options = data_options[(data_options['expiration'] == expiration) & (data_options['option_type'] == option_type)].reset_index(drop=True)
     
     return filtered_options
+
+#------------------------------------------------------------------------------------------------
+
+class OptionStrategy:
+    """Generates trading signals based on historical and implied volatilities."""
+    def __init__(self, data):
+        self.data = data
+        self.positions = {}
+        self.expirations = list(data.keys())
+
+    def generate_signals(self):
+        for date, details in self.data.items():
+            imp_vol = details.get('imp_vol')
+            hist_vol_30 = details.get('historical_vol_30') 
+            
+            if None in (imp_vol, hist_vol_30):
+                continue
+                
+            self.positions[date] = {
+                "action": "SELL" if imp_vol > hist_vol_30 else "BUY",
+                "option_type": details["option_type"],
+                "strike": details["strike"],
+                "asset_price": details["asset_price"], 
+                "option_price": details["option_price"],
+                "imp_vol": imp_vol,
+                "hist_vol_30": hist_vol_30
+            }
+
+    def plot_payoff(self, expiration_date):
+        if expiration_date not in self.positions:
+            print(f"No data for {expiration_date}.")
+            return
+
+        pos = self.positions[expiration_date]
+        strike = pos["strike"]
+        
+        # Calculate price range and payoff in one step
+        asset_prices = np.linspace(strike * 0.8, strike * 1.2, 500)
+        payoff = (np.maximum(asset_prices - strike, 0) if pos["option_type"] == "C" 
+                 else np.maximum(strike - asset_prices, 0)) - pos["option_price"]
+        
+        if pos["action"] == "SELL":
+            payoff = -payoff
+
+        # Create plot with styling
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.plot(asset_prices, payoff, 
+                label=f"Payoff {pos['option_type']} - {pos['action']} - {expiration_date}", 
+                color="black")
+        ax.axhline(0, color="black", linestyle="--", linewidth=1)
+
+        # Add colored regions
+        ax.fill_between(asset_prices, payoff, 0, where=(payoff > 0),
+                       facecolor="lightgreen", alpha=0.5)
+        ax.fill_between(asset_prices, payoff, 0, where=(payoff < 0),
+                       facecolor="lightcoral", alpha=0.5)
+
+        # Style the plot
+        ax.set_title(f"Payoff fecha expiracion: {expiration_date}", fontsize=12)
+        ax.set_xlabel("Precio", fontsize=10)
+        ax.set_ylabel("Payoff", fontsize=10)
+        ax.tick_params(labelsize=8)
+        ax.grid(True, linewidth=0.5, alpha=0.7)
+        ax.legend(fontsize=8)
+        
+        plt.tight_layout()
+        plt.show()
