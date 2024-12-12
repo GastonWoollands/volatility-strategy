@@ -5,6 +5,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from .fin_data import atm_option
 from .fin_options import implied_volatility, get_greeks
+import logging
 
 #------------------------------------------------------------------------------------------------
 
@@ -189,7 +190,6 @@ def filter_options_byma(data_options: pd.DataFrame, expiration, option_type: str
 #------------------------------------------------------------------------------------------------
 
 class OptionStrategy:
-    """Generates trading signals based on historical and implied volatilities."""
     def __init__(self, data):
         self.data = data
         self.positions = {}
@@ -199,10 +199,10 @@ class OptionStrategy:
         for date, details in self.data.items():
             imp_vol = details.get('imp_vol')
             hist_vol_30 = details.get('historical_vol_30') 
-            
+
             if None in (imp_vol, hist_vol_30):
                 continue
-                
+
             self.positions[date] = {
                 "action": "SELL" if imp_vol > hist_vol_30 else "BUY",
                 "option_type": details["option_type"],
@@ -213,42 +213,63 @@ class OptionStrategy:
                 "hist_vol_30": hist_vol_30
             }
 
-    def plot_payoff(self, expiration_date):
+    def plot_payoff(self, expiration_date, mix_strategy=False):
         if expiration_date not in self.positions:
             print(f"No data for {expiration_date}.")
             return
 
         pos = self.positions[expiration_date]
         strike = pos["strike"]
-        
-        # Calculate price range and payoff in one step
-        asset_prices = np.linspace(strike * 0.8, strike * 1.2, 500)
-        payoff = (np.maximum(asset_prices - strike, 0) if pos["option_type"] == "C" 
-                 else np.maximum(strike - asset_prices, 0)) - pos["option_price"]
-        
-        if pos["action"] == "SELL":
-            payoff = -payoff
+        asset_price = pos["asset_price"]
+        option_price = pos["option_price"]
+        option_type = pos["option_type"]
+        action = pos["action"]
+        imp_vol = pos["imp_vol"]
+        hist_vol_30 = pos["hist_vol_30"]
 
-        # Create plot with styling
+        # Calcular el rango de precios
+        asset_prices = np.linspace(0.5 * strike, 1.5 * strike, 500)
+
+        # Calcular el payoff de la opción
+        if option_type == "C":  # Call
+            intrinsic_value = np.maximum(asset_prices - strike, 0)
+        else:  # Put
+            intrinsic_value = np.maximum(strike - asset_prices, 0)
+        
+        payoff_option = intrinsic_value - option_price
+
+        if action == "SELL":
+            payoff_option = -payoff_option
+
+        # Payoff combinado (con o sin estrategia sintética)
+        payoff_combined = payoff_option.copy()
+        if mix_strategy:
+            if imp_vol < hist_vol_30:  # VI < VH
+                # Venta de Put (SELL P) + Compra Sintética del Activo (Posición Larga)
+                synthetic_payoff = asset_prices - asset_price  # Sintético largo
+                decision = "Venta de Put + Compra Sintética del Activo"
+            else:  # VI > VH
+                # Venta de Call (SELL C) + Venta Sintética del Activo (Posición Corta)
+                synthetic_payoff = asset_price - asset_prices  # Sintético corto
+                decision = "Venta de Call + Venta Sintética del Activo"
+            
+            payoff_combined += synthetic_payoff
+
+        # Graficar solo el payoff combinado con el fondo de ganancias y pérdidas
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(asset_prices, payoff, 
-                label=f"Payoff {pos['option_type']} - {pos['action']} - {expiration_date}", 
-                color="black")
+        ax.plot(asset_prices, payoff_combined, label="Payoff Combinado", color="black")
+
+        # Rellenar áreas de ganancia y pérdida
+        ax.fill_between(asset_prices, payoff_combined, 0, where=(payoff_combined > 0), color="lightgreen", alpha=0.5, label="Ganancia")
+        ax.fill_between(asset_prices, payoff_combined, 0, where=(payoff_combined < 0), color="lightcoral", alpha=0.5, label="Pérdida")
+
+        # Estilizar el gráfico
         ax.axhline(0, color="black", linestyle="--", linewidth=1)
-
-        # Add colored regions
-        ax.fill_between(asset_prices, payoff, 0, where=(payoff > 0),
-                       facecolor="lightgreen", alpha=0.5)
-        ax.fill_between(asset_prices, payoff, 0, where=(payoff < 0),
-                       facecolor="lightcoral", alpha=0.5)
-
-        # Style the plot
-        ax.set_title(f"Payoff fecha expiracion: {expiration_date}", fontsize=12)
-        ax.set_xlabel("Precio", fontsize=10)
-        ax.set_ylabel("Payoff", fontsize=10)
-        ax.tick_params(labelsize=8)
+        ax.set_title(f"Payoff - Fecha Expiración: {expiration_date}\n{decision if mix_strategy else 'Estrategia Simple'}", fontsize=14)
+        ax.set_xlabel("Precio del Activo", fontsize=12)
+        ax.set_ylabel("Payoff", fontsize=12)
+        ax.legend(fontsize=10)
         ax.grid(True, linewidth=0.5, alpha=0.7)
-        ax.legend(fontsize=8)
-        
+
         plt.tight_layout()
         plt.show()
