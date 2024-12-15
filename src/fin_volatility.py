@@ -220,17 +220,17 @@ class OptionStrategy:
 
         pos = self.positions[expiration_date]
         strike = pos["strike"]
-        asset_price = pos["asset_price"]
+        # asset_price = pos["asset_price"]
         option_price = pos["option_price"]
         option_type = pos["option_type"]
         action = pos["action"]
         imp_vol = pos["imp_vol"]
         hist_vol_30 = pos["hist_vol_30"]
 
-        # Calcular el rango de precios
+        # Price range
         asset_prices = np.linspace(0.5 * strike, 1.5 * strike, 500)
 
-        # Calcular el payoff de la opción
+        # Initial payoff
         if option_type == "C":  # Call
             intrinsic_value = np.maximum(asset_prices - strike, 0)
         else:  # Put
@@ -241,31 +241,44 @@ class OptionStrategy:
         if action == "SELL":
             payoff_option = -payoff_option
 
-        # Payoff combinado (con o sin estrategia sintética)
+        # Combined payoff for mixed strategies
         payoff_combined = payoff_option.copy()
+        decision = "Estrategia Simple"
+
         if mix_strategy:
             if imp_vol < hist_vol_30:  # VI < VH
-                # Venta de Put (SELL P) + Compra Sintética del Activo (Posición Larga)
-                synthetic_payoff = asset_prices - asset_price  # Sintético largo
-                decision = "Venta de Put + Compra Sintética del Activo"
+                # Strategy: Sell PUT + Buy CALL
+                # Sell PUT
+                put_intrinsic = np.maximum(strike - asset_prices, 0)
+                payoff_put = -put_intrinsic + option_price  # Sell PUT (SELL P)
+
+                # Buy CALL
+                call_intrinsic = np.maximum(asset_prices - strike, 0)
+                payoff_call = call_intrinsic - option_price  # Buy CALL (BUY C)
+
+                payoff_combined = payoff_put + payoff_call
+                decision = "Venta de PUT + Compra de CALL"
             else:  # VI > VH
-                # Venta de Call (SELL C) + Venta Sintética del Activo (Posición Corta)
-                synthetic_payoff = asset_price - asset_prices  # Sintético corto
-                decision = "Venta de Call + Venta Sintética del Activo"
-            
-            payoff_combined += synthetic_payoff
+                # Strategy: Sell CALL + Buy PUT
+                # Sell CALL
+                call_intrinsic = np.maximum(asset_prices - strike, 0)
+                payoff_call = -call_intrinsic + option_price  # Sell CALL (SELL C)
 
-        # Graficar solo el payoff combinado con el fondo de ganancias y pérdidas
+                # Buy PUT
+                put_intrinsic = np.maximum(strike - asset_prices, 0)
+                payoff_put = put_intrinsic - option_price  # Buy PUT (BUY P)
+
+                payoff_combined = payoff_call + payoff_put
+                decision = "Venta de CALL + Compra de PUT"
+
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(asset_prices, payoff_combined, label="Payoff Combinado", color="black")
+        ax.plot(asset_prices, payoff_combined, label="Payoff", color="black")
 
-        # Rellenar áreas de ganancia y pérdida
         ax.fill_between(asset_prices, payoff_combined, 0, where=(payoff_combined > 0), color="lightgreen", alpha=0.5, label="Ganancia")
         ax.fill_between(asset_prices, payoff_combined, 0, where=(payoff_combined < 0), color="lightcoral", alpha=0.5, label="Pérdida")
 
-        # Estilizar el gráfico
         ax.axhline(0, color="black", linestyle="--", linewidth=1)
-        ax.set_title(f"Payoff - Fecha Expiración: {expiration_date}\n{decision if mix_strategy else 'Estrategia Simple'}", fontsize=14)
+        ax.set_title(f"Payoff - Fecha Expiración: {expiration_date}\n{decision}", fontsize=14)
         ax.set_xlabel("Precio del Activo", fontsize=12)
         ax.set_ylabel("Payoff", fontsize=12)
         ax.legend(fontsize=10)
