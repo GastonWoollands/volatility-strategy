@@ -57,7 +57,7 @@ class DataPreprocessor:
     
     def preprocess_data(self, df, predict=False):
         """
-        Preprocesses data and saves scaler if a path is provided.
+        Preprocesses data and splits into train and test.
         """
         _df = df.copy()
 
