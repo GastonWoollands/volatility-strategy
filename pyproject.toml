@@ -1,0 +1,45 @@
+[project]
+name = "fin-volatility"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "mlflow (>=2.22.0,<3.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "scikit-learn (>=1.6.1,<2.0.0)",
+    "arch (>=7.2.0,<8.0.0)",
+    "statsmodels (>=0.14.4,<0.15.0)",
+    "numpy (>=2.2.6,<3.0.0)",
+    "yfinance (>=0.2.61,<0.3.0)",
+    "pytest (>=8.3.5,<9.0.0)",
+    "pyportfolioopt (>=1.5.6,<2.0.0)",
+    "pandas-datareader (>=0.10.0,<0.11.0)",
+    "xgboost (>=3.0.2,<4.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.gpu.dependencies]
+torch = "^2.7.0"
+torchvision = "^0.22.0"
+torchaudio = "^2.7.0"
+
+
+[tool.poetry.group.dev.dependencies]
+commitizen = "^4.8.3"
+
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "$version"
+version_scheme = "pep440"
+version_provider = "pep621"
+update_changelog_on_bump = true
+major_version_zero = true
