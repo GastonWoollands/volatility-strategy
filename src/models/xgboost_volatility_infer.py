@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import mlflow
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from xgboost_model import make_features, make_target
+from models.xgboost_model import make_features, make_target
 from data.loader import fetch_ticker_data
 
 
